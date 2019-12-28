@@ -161,26 +161,23 @@ def attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot):
     
     Returns
     -------
-    G_sf_day :  networkx Graph instance, graph of the nodes that stay in the SF system 
-                + those that come from the ER network
     A_sf_day : numpy matrix, adjacency matrix of G_sf_day 
     """
+
     edge_list_sf = list(G_sf_stay.edges)
     for i,ID in enumerate(new_ids_er.keys()):
         k = deg_er[i]
         indexes = np.random.choice(len(edge_list_sf), size=k, replace=False)
-        #targets = []
-        for j in indexes:
-            trg = np.random.choice(list(edge_list_sf[j]))
-            #if trg in targets:
-            edge_list_sf.append((ID,trg))
-            
-    G_sf_day = nx.Graph(edge_list_sf)
-    # add also the nodes without edges to get the known dimension N_tot
-    G_sf_day.add_nodes_from(np.arange(N_tot))
-    A_sf_day = nx.to_numpy_matrix(G_sf_day, nodelist=np.arange(N_tot))
-    
-    return G_sf_day, A_sf_day
+        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes]
+        edge_list_sf += edges # concatenate new edges
+    edge_list_sf = np.array(edge_list_sf)
+    x = edge_list_sf[:,0]
+    y = edge_list_sf[:,1]
+    A_sf_day = np.zeros((N_tot,N_tot)) 
+    A_sf_day[x,y] = 1
+    A_sf_day[y,x] = 1     
+
+    return A_sf_day
 
 def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new_ids_sf, new_ids_er, 
                            deg_sf, deg_er, A_sf, A_er, G_sf_stay, G_er_stay, beta, mu, gamma):
@@ -210,8 +207,8 @@ def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new
     ### day ###
     
     # compute day networks
-    _, A_sf_day = attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot)
-    _, A_er_day = attach_travellers(G_er_stay, new_ids_sf, deg_sf, N_tot)
+    A_sf_day = attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot)
+    A_er_day = attach_travellers(G_er_stay, new_ids_sf, deg_sf, N_tot)
     
     # mobility masks (True if present, False if travelling)
     mob_mask_sf = (~np.isin(np.arange(N_tot), travellers_sf)).astype(int)
