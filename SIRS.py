@@ -17,14 +17,16 @@ def prepare_init_state(N, I0):
         state[:,1] = 1 for the infected, 0 for the others
         state[:,2] = 1 for the recovered, 0 for the others
     """
-    susceptible = np.ones(N)
+    susceptible = np.ones(N) 
     seeds = np.random.choice(np.arange(N), size = I0)
     susceptible[seeds] = 0
-    state = np.zeros((N,3))
+    state = np.zeros((N,3)) #basically this creates a matrix in which each column is a status (infected, susceptible or recovered). Each row contains two zeros and a 1 in the position of the status. E.g. node i is recovered than (i,0)=(i,1)=0, (i,2)=1, if node j is susceptible (j,0)=1, (j,1)=0, (j,2)=0 (v. next function)
     state[:,0] = susceptible
     state[seeds,1] = 1
     return state
 
+
+#!ATTENTION: the only difference between this function and the next one is the mask: in the second function the mask is needed to keep track of people that are traveling so are not present in the moment
 def SIRS_step(A, state, beta, mu, gamma, T=0.5, debug=False):
     """
     SIRS step for a single network. Updated A and state needs to be computed
@@ -115,18 +117,18 @@ def SIRS_masked_step(A, state, mask, beta, mu, gamma, T=0.5, debug=False):
     dprint = print if debug else lambda *args, **kwargs : None
         
     ### S -> I ###
-    p_I = beta*np.matmul(A,state[:,1]*mask).T # prob of getting the infection
+    p_I = beta*np.matmul(A,state[:,1]*mask).T # prob of getting the infection #this gives the total probability of a node to get infected taking into account the number of connections it has with possible infected (matmul sums up the nieghtbours)
     p_I = np.array(p_I).reshape(N)
     u = np.random.rand(N) 
-    mask_S = (u < p_I*state[:,0]) # apply only to susceptible
-    new_state[mask_S,1] = 1
-    state[mask_S,0] = 0
+    mask_S = (u < p_I*state[:,0]) # apply only to susceptible #if the state of the node was different from susceptble(i.e. state[:,0]=0 u will always be greater than that quantity and the node does not get infected, if it was susceptible it gets infected with probability u.
+    new_state[mask_S,1] = 1 #new intefected
+    state[mask_S,0] = 0 #put to 0 the new infected in the susceptible list
     
     dprint("New I: ", new_state[:,1].sum())
     
     ### I -> R ###
     u = np.random.rand(N) 
-    mask_I = (u < mu*state[:,1]) # apply only to infected
+    mask_I = (u < mu*state[:,1]) # apply only to infected 
     new_state[mask_I,2] = 1
     state[mask_I,1] = 0
     
@@ -140,7 +142,7 @@ def SIRS_masked_step(A, state, mask, beta, mu, gamma, T=0.5, debug=False):
     
     dprint("New S: ", new_state[:,0].sum())
     
-    state = state + new_state
+    state = state + new_state 
     
     dprint("Updated S: ", state[:,0].sum())
     dprint("Updated I: ", state[:,1].sum())
@@ -148,13 +150,13 @@ def SIRS_masked_step(A, state, mask, beta, mu, gamma, T=0.5, debug=False):
     
     return state
 
-def attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot):
+def attach_travellers_sf(G_sf_stay, new_ids_er, deg_er, N_tot):
     """
     Attach new travellers using preferential attachment and keeping their original degrees.
     
     Parameters
     ----------
-    G_sf_stay : networkx Graph instance, graph of the nodes that do not travel
+    G_sf_stay : Graph instance, graph of the nodes that do not travel
     new_ids_er :  dict, contains the pairs {'new_id_er':old_id}
     deg_er :  numpy array of int, contains the degrees of all the travelling nodes from the ER network
     N_tot : int, number of original nodes + travelling nodes
@@ -165,12 +167,14 @@ def attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot):
     """
 
     edge_list_sf = list(G_sf_stay.edges)
-    for i,ID in enumerate(new_ids_er.keys()):
-        k = deg_er[i]
-        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False)
-        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes]
+    for i,ID in enumerate(new_ids_er.keys()): #iterates over "number of the travellers" and its id in the ER net
+        k = deg_er[i] #degree of the node
+        #this part chooses the new neightbour using an approach that works both for preferential attachment than for ER networks: if i firstly select a certain number of edges between the edges list (indexes=..., see below) if a node makes a lot of connections I have more probability to pick it (preferential attachment). As for random attachment, is it equivalent?
+        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False) #chooses k links among the edges of the target net
+        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes] #pairs the id with one link at random in the edge (again, if one of the links has a lot of connections it will be more likely for it to be picked) 
         edge_list_sf += edges # concatenate new edges
-    edge_list_sf = np.array(edge_list_sf)
+    edge_list_sf = np.array(edge_list_sf) 
+    #updates the adjacency matrix of the scale free net as target
     x = edge_list_sf[:,0]
     y = edge_list_sf[:,1]
     A_sf_day = np.zeros((N_tot,N_tot)) 
@@ -179,8 +183,40 @@ def attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot):
 
     return A_sf_day
 
-def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new_ids_sf, new_ids_er, 
-                           deg_sf, deg_er, A_sf, A_er, G_sf_stay, G_er_stay, beta, mu, gamma):
+def attach_travellers_er(G_er_stay, new_ids_sf, deg_sf, N_tot):
+    """
+    Attach new travellers at random and keeping their original degrees.
+    
+    Parameters
+    ----------
+    G_er_stay : Graph instance, graph of the nodes that do not travel
+    new_ids_sf :  dict, contains the pairs {'new_id_sf':old_id}
+    deg_sf :  numpy array of int, contains the degrees of all the travelling nodes from the SF network
+    N_tot : int, number of original nodes + travelling nodes
+    
+    Returns
+    -------
+    A_er_day : numpy matrix, adjacency matrix of G_er_day 
+    """
+    edge_list_er = list(G_er_stay.edges)
+    nodes_er = list(G_er_stay.nodes)
+    for i,ID in enumerate(new_ids_sf.keys()): #iterates over "number of the travellers" 
+        k = deg_sf[i] #degree of the travelling node
+        #this part chooses the new neightbour at random
+        indexes = np.random.choice(nodes_er, size=k, replace=False) #chooses k nodes among the edges of the target net
+        edges = [(ID,j) for j in indexes] #pairs the id with the chosen nodes 
+        edge_list_er += edges # concatenate new edges
+    edge_list_er = np.array(edge_list_er) 
+    #updates the adjacency matrix of the scale free net as target
+    x = edge_list_er[:,0]
+    y = edge_list_er[:,1]
+    A_er_day = np.zeros((N_tot,N_tot)) 
+    A_er_day[x,y] = 1
+    A_er_day[y,x] = 1     
+
+    return A_er_day
+
+def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, original_er_net, original_sf_net,new_ids_sf, new_ids_er, deg_sf, deg_er, A_sf, A_er, G_sf_stay, G_er_stay, beta, mu, gamma):
     """ 
     Simulate a single step of a SIRS dynamics over 2 coupled network with mobility, 
     taking into account the undelying structure of the networks. 
@@ -206,9 +242,9 @@ def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new
     
     ### day ###
     
-    # compute day networks
-    A_sf_day = attach_travellers(G_sf_stay, new_ids_er, deg_er, N_tot)
-    A_er_day = attach_travellers(G_er_stay, new_ids_sf, deg_sf, N_tot)
+    # compute day networks: attach travellers to 
+    A_sf_day = attach_travellers_sf(G_sf_stay, new_ids_er, deg_er, N_tot)
+    A_er_day = attach_travellers_er(G_er_stay, new_ids_sf, deg_sf, N_tot)
     
     # mobility masks (True if present, False if travelling)
     mob_mask_sf = (~np.isin(np.arange(N_tot), travellers_sf)).astype(int)
@@ -237,7 +273,7 @@ def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new
     
     ### night ###
     
-    # make SIRS step
+    # make SIRS step: i.e. "infection" inside community of residence
     state_sf = SIRS_step(A_sf, state_sf, beta, mu, gamma)
     state_er = SIRS_step(A_er, state_er, beta, mu, gamma)
     
@@ -314,6 +350,7 @@ def prepare_two_sys(N, I_sf, I_er, p_mob, mean_degree):
     # Compute the adjacency matrices and the networks of the remainers
     mob_mask_sf = np.isin(np.arange(N), travellers_sf)
     A_sf_stay = np.copy(A_sf)
+    #put to 0 elements in the adjacency matrix corresponding to travellers
     A_sf_stay[mob_mask_sf,:] = 0
     A_sf_stay[:,mob_mask_sf] = 0
     G_sf_stay = nx.from_numpy_matrix(A_sf_stay)
@@ -330,9 +367,9 @@ def prepare_two_sys(N, I_sf, I_er, p_mob, mean_degree):
     
     # wrap variables in dictionaries 
     variables_net_sf = {'travellers_sf':travellers_sf, 'new_ids_sf':new_ids_sf, 'deg_sf':deg_sf,
-                        'A_sf':A_sf, 'G_sf_stay':G_sf_stay }
+                        'A_sf':A_sf, 'G_sf_stay':G_sf_stay , 'original_sf_net':G_sf}
 
     variables_net_er = {'travellers_er':travellers_er, 'new_ids_er':new_ids_er, 'deg_er':deg_er,
-                        'A_er':A_er, 'G_er_stay':G_er_stay }
+                        'A_er':A_er, 'G_er_stay':G_er_stay, 'original_er_net':G_er}
     
     return state_sf, state_er, variables_net_sf, variables_net_er
