@@ -167,14 +167,12 @@ def attach_travellers_sf(G_sf_stay, new_ids_er, deg_er, N_tot):
     """
 
     edge_list_sf = list(G_sf_stay.edges)
-    for i,ID in enumerate(new_ids_er.keys()): #iterates over "number of the travellers" and its id in the ER net
-        k = deg_er[i] #degree of the node
-        #this part chooses the new neightbour using an approach that works both for preferential attachment than for ER networks: if i firstly select a certain number of edges between the edges list (indexes=..., see below) if a node makes a lot of connections I have more probability to pick it (preferential attachment). As for random attachment, is it equivalent?
-        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False) #chooses k links among the edges of the target net
-        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes] #pairs the id with one link at random in the edge (again, if one of the links has a lot of connections it will be more likely for it to be picked) 
-        edge_list_sf += edges # concatenate new edges
+    for i,ID in enumerate(new_ids_er.keys()): 
+        k = deg_er[i] 
+        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False)
+        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes] 
+        edge_list_sf += edges
     edge_list_sf = np.array(edge_list_sf) 
-    #updates the adjacency matrix of the scale free net as target
     x = edge_list_sf[:,0]
     y = edge_list_sf[:,1]
     A_sf_day = np.zeros((N_tot,N_tot)) 
@@ -216,7 +214,7 @@ def attach_travellers_er(G_er_stay, new_ids_sf, deg_sf, N_tot):
 
     return A_er_day
 
-def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, original_er_net, original_sf_net,new_ids_sf, new_ids_er, deg_sf, deg_er, A_sf, A_er, G_sf_stay, G_er_stay, beta, mu, gamma):
+def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, new_ids_sf, new_ids_er, deg_sf, deg_er, A_sf, A_er, G_sf_stay, G_er_stay, beta, mu, gamma):
     """ 
     Simulate a single step of a SIRS dynamics over 2 coupled network with mobility, 
     taking into account the undelying structure of the networks. 
@@ -269,7 +267,7 @@ def two_sys_full_SIRS_step(state_sf, state_er, travellers_sf, travellers_er, ori
 
     # overwrite them into the original system 
     state_sf[travellers_sf] = state_sf_trav
-    state_er[travellers_sf] = state_er_trav
+    state_er[travellers_er] = state_er_trav
     
     ### night ###
     
@@ -363,13 +361,13 @@ def prepare_two_sys(N, I_sf, I_er, p_mob, mean_degree):
     
     # Compute the original degrees of the travellers
     deg_sf = [k for n,k in G_sf.degree(travellers_sf)]
-    deg_er = [k for n,k in G_sf.degree(travellers_er)]
+    deg_er = [k for n,k in G_er.degree(travellers_er)]
     
     # wrap variables in dictionaries 
     variables_net_sf = {'travellers_sf':travellers_sf, 'new_ids_sf':new_ids_sf, 'deg_sf':deg_sf,
-                        'A_sf':A_sf, 'G_sf_stay':G_sf_stay , 'original_sf_net':G_sf}
+                        'A_sf':A_sf, 'G_sf_stay':G_sf_stay}
 
     variables_net_er = {'travellers_er':travellers_er, 'new_ids_er':new_ids_er, 'deg_er':deg_er,
-                        'A_er':A_er, 'G_er_stay':G_er_stay, 'original_er_net':G_er}
+                        'A_er':A_er, 'G_er_stay':G_er_stay}
     
     return state_sf, state_er, variables_net_sf, variables_net_er
