@@ -20,13 +20,13 @@ def prepare_init_state(N, I0):
     susceptible = np.ones(N) 
     seeds = np.random.choice(np.arange(N), size = I0)
     susceptible[seeds] = 0
-    state = np.zeros((N,3)) #basically this creates a matrix in which each column is a status (infected, susceptible or recovered). Each row contains two zeros and a 1 in the position of the status. E.g. node i is recovered than (i,0)=(i,1)=0, (i,2)=1, if node j is susceptible (j,0)=1, (j,1)=0, (j,2)=0 (v. next function)
+    state = np.zeros((N,3))
     state[:,0] = susceptible
     state[seeds,1] = 1
     return state
 
 
-#!ATTENTION: the only difference between this function and the next one is the mask: in the second function the mask is needed to keep track of people that are traveling so are not present in the moment
+
 def SIRS_step(A, state, beta, mu, gamma, T=0.5, debug=False):
     """
     SIRS step for a single network. Updated A and state needs to be computed
@@ -117,12 +117,12 @@ def SIRS_masked_step(A, state, mask, beta, mu, gamma, T=0.5, debug=False):
     dprint = print if debug else lambda *args, **kwargs : None
         
     ### S -> I ###
-    p_I = beta*np.matmul(A,state[:,1]*mask).T # prob of getting the infection #this gives the total probability of a node to get infected taking into account the number of connections it has with possible infected (matmul sums up the nieghtbours)
+    p_I = beta*np.matmul(A,state[:,1]*mask).T 
     p_I = np.array(p_I).reshape(N)
     u = np.random.rand(N) 
-    mask_S = (u < p_I*state[:,0]) # apply only to susceptible #if the state of the node was different from susceptble(i.e. state[:,0]=0 u will always be greater than that quantity and the node does not get infected, if it was susceptible it gets infected with probability u.
+    mask_S = (u < p_I*state[:,0])
     new_state[mask_S,1] = 1 #new intefected
-    state[mask_S,0] = 0 #put to 0 the new infected in the susceptible list
+    state[mask_S,0] = 0 
     
     dprint("New I: ", new_state[:,1].sum())
     
@@ -167,11 +167,9 @@ def attach_travellers_sf(G_stay, new_ids, travel_deg, N_tot):
     """
 
     edge_list_sf = list(G_stay.edges)
-    for i,ID in enumerate(new_ids.keys()): #iterates over "number of the travellers" and its id in the ER net
-        k = travel_deg[i] #degree of the node
-        #this part chooses the new neightbour using an approach that works both for preferential attachment than for ER networks: if i firstly select a certain number of edges between the edges list (indexes=..., see below) if a node makes a lot of connections I have more probability to pick it (preferential attachment). As for random attachment, is it equivalent?
-        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False) #chooses k links among the edges of the target net
-        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes] #pairs the id with one link at random in the edge (again, if one of the links has a lot of connections it will be more likely for it to be picked) 
+    for i,ID in enumerate(new_ids.keys()):
+        indexes = np.random.choice(len(edge_list_sf), size=k, replace=False) 
+        edges = [(ID,np.random.choice(list(edge_list_sf[j]))) for j in indexes] 
         edge_list_sf += edges # concatenate new edges
     edge_list_sf = np.array(edge_list_sf) 
     #updates the adjacency matrix of the scale free net as target
